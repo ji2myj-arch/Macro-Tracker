@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Macro Tracker</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Arial; margin: 18px; max-width: 720px; }
+    h1 { margin: 0 0 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 12px 0; }
+    label { font-size: 12px; color:#444; display:block; margin-bottom:6px; }
+    input, button { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; }
+    button { cursor: pointer; border: 1px solid #111; background: #111; color: #fff; }
+    button.secondary { background: #fff; color:#111; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; font-size: 14px; }
+    .muted { color:#666; font-size: 12px; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#f3f3f3; font-size:12px; margin-left:6px;}
+    .totals { display:flex; gap:10px; flex-wrap:wrap; }
+    .totals div { padding:8px 10px; border:1px solid #eee; border-radius:10px; }
+  </style>
+</head>
+<body>
+  <h1>Macro Tracker <span class="pill" id="datePill"></span></h1>
+  <div class="muted">Local-only. Data stays on this device/browser.</div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Food / meal name</label>
+        <input id="name" placeholder="e.g., 250g keema" />
+      </div>
+      <div>
+        <label>Time (optional)</label>
+        <input id="time" placeholder="e.g., 5:30 PM" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Protein (g)</label>
+        <input id="protein" type="number" inputmode="decimal" placeholder="0" />
+      </div>
+      <div>
+        <label>Carbs (g)</label>
+        <input id="carbs" type="number" inputmode="decimal" placeholder="0" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Fat (g)</label>
+        <input id="fat" type="number" inputmode="decimal" placeholder="0" />
+      </div>
+      <div>
+        <label>Calories (optional)</label>
+        <input id="calories" type="number" inputmode="decimal" placeholder="auto if blank" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Fiber (g) (optional)</label>
+        <input id="fiber" type="number" inputmode="decimal" placeholder="0" />
+      </div>
+      <div style="display:flex; align-items:end;">
+        <button id="addBtn">Add entry</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Daily targets</label>
+        <div class="row">
+          <input id="tProtein" type="number" inputmode="decimal" placeholder="Protein g" />
+          <input id="tCarbs" type="number" inputmode="decimal" placeholder="Carbs g" />
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <input id="tFat" type="number" inputmode="decimal" placeholder="Fat g" />
+          <input id="tCalories" type="number" inputmode="decimal" placeholder="Calories" />
+        </div>
+        <div style="margin-top:10px;">
+          <button class="secondary" id="saveTargetsBtn">Save targets</button>
+        </div>
+      </div>
+      <div>
+        <label>Today totals</label>
+        <div class="totals" id="totals"></div>
+        <div class="muted" id="remaining" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="secondary" id="exportBtn">Export JSON</button>
+      <button class="secondary" id="importBtn">Import JSON</button>
+      <button class="secondary" id="clearTodayBtn">Clear today</button>
+      <button class="secondary" id="clearAllBtn">Clear all</button>
+    </div>
+    <input id="fileInput" type="file" accept="application/json" style="display:none;" />
+    <div class="muted" style="margin-top:8px;">Tip: export weekly as a backup.</div>
+  </div>
+
+  <div class="card">
+    <label>Today entries</label>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th><th>P</th><th>C</th><th>F</th><th>Cal</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="list"></tbody>
+    </table>
+  </div>
+
+<script>
+  const todayKey = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const state = {
+    entriesByDay: JSON.parse(localStorage.getItem("entriesByDay") || "{}"),
+    targets: JSON.parse(localStorage.getItem("targets") || '{"protein":240,"carbs":180,"fat":70,"calories":2200}')
+  };
+
+  const save = () => {
+    localStorage.setItem("entriesByDay", JSON.stringify(state.entriesByDay));
+    localStorage.setItem("targets", JSON.stringify(state.targets));
+  };
+
+  const getEntries = (day = todayKey()) => state.entriesByDay[day] || [];
+  const setEntries = (entries, day = todayKey()) => { state.entriesByDay[day] = entries; save(); };
+
+  const calcCalories = (p,c,f) => (p*4) + (c*4) + (f*9);
+
+  function render() {
+    const day = todayKey();
+    document.getElementById("datePill").textContent = day;
+
+    // targets inputs
+    document.getElementById("tProtein").value = state.targets.protein ?? "";
+    document.getElementById("tCarbs").value = state.targets.carbs ?? "";
+    document.getElementById("tFat").value = state.targets.fat ?? "";
+    document.getElementById("tCalories").value = state.targets.calories ?? "";
+
+    // list
+    const tbody = document.getElementById("list");
+    tbody.innerHTML = "";
+    const entries = getEntries(day);
+
+    let totals = {protein:0, carbs:0, fat:0, calories:0, fiber:0};
+
+    entries.forEach((e, idx) => {
+      totals.protein += e.protein;
+      totals.carbs += e.carbs;
+      totals.fat += e.fat;
+      totals.calories += e.calories;
+      totals.fiber += (e.fiber || 0);
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(e.name)} <span class="muted">${e.time ? "• " + escapeHtml(e.time) : ""}</span></td>
+        <td>${fmt(e.protein)}</td>
+        <td>${fmt(e.carbs)}</td>
+        <td>${fmt(e.fat)}</td>
+        <td>${fmt(e.calories)}</td>
+        <td><button class="secondary" data-del="${idx}">Del</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // totals view
+    const totalsDiv = document.getElementById("totals");
+    totalsDiv.innerHTML = `
+      <div><strong>P</strong> ${fmt(totals.protein)}g</div>
+      <div><strong>C</strong> ${fmt(totals.carbs)}g</div>
+      <div><strong>F</strong> ${fmt(totals.fat)}g</div>
+      <div><strong>Cal</strong> ${fmt(totals.calories)}</div>
+      <div><strong>Fiber</strong> ${fmt(totals.fiber)}g</div>
+    `;
+
+    // remaining
+    const rem = {
+      protein: (state.targets.protein ?? 0) - totals.protein,
+      carbs: (state.targets.carbs ?? 0) - totals.carbs,
+      fat: (state.targets.fat ?? 0) - totals.fat,
+      calories: (state.targets.calories ?? 0) - totals.calories
+    };
+
+    document.getElementById("remaining").textContent =
+      `Remaining: P ${fmt(rem.protein)}g • C ${fmt(rem.carbs)}g • F ${fmt(rem.fat)}g • Cal ${fmt(rem.calories)}`;
+
+    // delete handlers
+    tbody.querySelectorAll("button[data-del]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.getAttribute("data-del"));
+        const next = [...entries];
+        next.splice(i, 1);
+        setEntries(next, day);
+        render();
+      });
+    });
+  }
+
+  function fmt(n) {
+    const x = Number(n || 0);
+    return (Math.round(x * 10) / 10).toString();
+  }
+
+  function escapeHtml(str) {
+    return String(str || "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  document.getElementById("addBtn").addEventListener("click", () => {
+    const name = document.getElementById("name").value.trim() || "Untitled";
+    const time = document.getElementById("time").value.trim();
+
+    const protein = Number(document.getElementById("protein").value || 0);
+    const carbs = Number(document.getElementById("carbs").value || 0);
+    const fat = Number(document.getElementById("fat").value || 0);
+    const fiber = Number(document.getElementById("fiber").value || 0);
+
+    let calories = document.getElementById("calories").value;
+    calories = calories === "" ? calcCalories(protein, carbs, fat) : Number(calories || 0);
+
+    const entry = { name, time, protein, carbs, fat, calories, fiber, ts: Date.now() };
+
+    const day = todayKey();
+    const entries = getEntries(day);
+    setEntries([entry, ...entries], day);
+
+    // clear quick-add fields
+    ["name","time","protein","carbs","fat","calories","fiber"].forEach(id => document.getElementById(id).value = "");
+    render();
+  });
+
+  document.getElementById("saveTargetsBtn").addEventListener("click", () => {
+    state.targets = {
+      protein: Number(document.getElementById("tProtein").value || 0),
+      carbs: Number(document.getElementById("tCarbs").value || 0),
+      fat: Number(document.getElementById("tFat").value || 0),
+      calories: Number(document.getElementById("tCalories").value || 0)
+    };
+    save();
+    render();
+  });
+
+  document.getElementById("exportBtn").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify({ entriesByDay: state.entriesByDay, targets: state.targets }, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `macro-tracker-backup-${todayKey()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("importBtn").addEventListener("click", () => {
+    document.getElementById("fileInput").click();
+  });
+
+  document.getElementById("fileInput").addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (data.entriesByDay) state.entriesByDay = data.entriesByDay;
+    if (data.targets) state.targets = data.targets;
+    save();
+    render();
+    e.target.value = "";
+  });
+
+  document.getElementById("clearTodayBtn").addEventListener("click", () => {
+    const day = todayKey();
+    delete state.entriesByDay[day];
+    save();
+    render();
+  });
+
+  document.getElementById("clearAllBtn").addEventListener("click", () => {
+    localStorage.removeItem("entriesByDay");
+    localStorage.removeItem("targets");
+    state.entriesByDay = {};
+    state.targets = {protein:240, carbs:180, fat:70, calories:2200};
+    save();
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
