@@ -1,3 +1,7 @@
+<scripts>
+const SHEETS_API_BASE = "https://script.google.com/macros/s/AKfycbyHe7Yi1IwX0heXOMsxAFZWDIiqis-cmjUnld6dG3sFl5rgnytf-2RuEfuJQoFuNb6z/exec"; // ends with /exec
+const SHEETS_API_KEY = "Itsy bitsy spider went up the waterspout";
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -246,6 +250,34 @@
     ["name","time","protein","carbs","fat","calories","fiber"].forEach(id => document.getElementById(id).value = "");
     render();
   });
+
+setEntries([entry, ...entries], day);
+
+/* ================================
+   AUTO-LOG TO GOOGLE SHEETS
+   ================================ */
+(async () => {
+  try {
+    await fetch(`${SHEETS_API_BASE}/log?key=${encodeURIComponent(SHEETS_API_KEY)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: todayKey(),
+        time: time || "",
+        name,
+        protein_g: protein,
+        carbs_g: carbs,
+        fat_g: fat,
+        calories,
+        fiber_g: fiber,
+        source: "webapp"
+      })
+    });
+  } catch (e) {
+    console.warn("Sheets log failed", e);
+  }
+})();
+
 
   document.getElementById("saveTargetsBtn").addEventListener("click", () => {
     state.targets = {
