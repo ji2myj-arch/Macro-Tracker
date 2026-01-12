@@ -19,6 +19,21 @@
     .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#f3f3f3; font-size:12px; margin-left:6px;}
     .totals { display:flex; gap:10px; flex-wrap:wrap; }
     .totals div { padding:8px 10px; border:1px solid #eee; border-radius:10px; }
+     /* --- Windows click fix: ensure Add Entry is clickable --- */
+  button {
+    position: relative;
+    z-index: 10;
+    pointer-events: auto;
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+  }
+
+  input {
+    pointer-events: auto;
+  }
   </style>
 </head>
 <body>
@@ -347,6 +362,7 @@ setEntries([entry, ...entries], day);
 </script>
 </body>
 </html>
+
 
 
 
